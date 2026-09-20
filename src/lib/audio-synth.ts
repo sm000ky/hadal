@@ -180,6 +180,55 @@ class HadalAudioEngine {
   }
 
   /**
+   * Klaxosaur Sub-Harmonic Resonance (Protocol 002 Easter Egg)
+   */
+  public triggerKlaxosaurResonance(): void {
+    if (!this.ctx || !this.masterGain || this.isMuted) return;
+
+    const t = this.ctx.currentTime;
+    // Layer 1: Sub bass swell
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sawtooth';
+    subOsc.frequency.setValueAtTime(32, t);
+    subOsc.frequency.exponentialRampToValueAtTime(55, t + 1.2);
+    subOsc.frequency.exponentialRampToValueAtTime(27.5, t + 3.8);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(120, t);
+    filter.frequency.exponentialRampToValueAtTime(450, t + 1.2);
+    filter.frequency.exponentialRampToValueAtTime(60, t + 3.8);
+    filter.Q.setValueAtTime(8.0, t);
+
+    subGain.gain.setValueAtTime(0.001, t);
+    subGain.gain.linearRampToValueAtTime(0.45, t + 0.8);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, t + 4.0);
+
+    subOsc.connect(filter);
+    filter.connect(subGain);
+    subGain.connect(this.masterGain);
+    subOsc.start(t);
+    subOsc.stop(t + 4.2);
+
+    // Layer 2: Ethereal harmonic choir tone
+    const choirOsc = this.ctx.createOscillator();
+    const choirGain = this.ctx.createGain();
+    choirOsc.type = 'sine';
+    choirOsc.frequency.setValueAtTime(220, t);
+    choirOsc.frequency.linearRampToValueAtTime(233.08, t + 2.0); // eerie minor second rise
+
+    choirGain.gain.setValueAtTime(0.001, t);
+    choirGain.gain.linearRampToValueAtTime(0.18, t + 0.6);
+    choirGain.gain.exponentialRampToValueAtTime(0.0001, t + 3.5);
+
+    choirOsc.connect(choirGain);
+    choirGain.connect(this.masterGain);
+    choirOsc.start(t);
+    choirOsc.stop(t + 3.6);
+  }
+
+  /**
    * Hull Stress Metallic Creak Sound (hydrostatic pressure creak)
    */
   public triggerHullCreak(): void {

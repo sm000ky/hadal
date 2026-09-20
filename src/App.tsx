@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { OceanScene } from './lib/three/ocean-scene';
+import { CameraViewMode, OceanScene } from './lib/three/ocean-scene';
 import { hadalAudio } from './lib/audio-synth';
 import { getActiveCue, NARRATION_TOTAL_DURATION } from './lib/narrative-cues';
 import { LanguageCode, NarrativeCue, OceanZone } from './lib/types';
@@ -14,7 +14,7 @@ export function App() {
   const vocalAudioRef = useRef<HTMLAudioElement | null>(null);
   const sceneRef = useRef<OceanScene | null>(null);
 
-  // App Phase: 'gate' (intro), 'active' (diving/listening)
+  // App Phase
   const [hasStarted, setHasStarted] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -22,6 +22,11 @@ export function App() {
   const [currentCue, setCurrentCue] = useState<NarrativeCue | null>(null);
   const [currentDepth, setCurrentDepth] = useState(0);
   const [currentZone, setCurrentZone] = useState<OceanZone>('EPIPELAGIC');
+
+  // Interactive Surprise Features
+  const [cameraMode, setCameraMode] = useState<CameraViewMode>('CHASE');
+  const [isProtocol002, setIsProtocol002] = useState(false);
+  const [, setPingCount] = useState(0);
 
   // Subtitle & Language preferences
   const [lang, setLang] = useState<LanguageCode>('en');
@@ -38,7 +43,7 @@ export function App() {
       canvas: canvasRef.current,
       onReady: () => {
         console.log('Ocean Scene initialized.');
-      }
+      },
     });
     sceneRef.current = scene;
 
@@ -81,7 +86,6 @@ export function App() {
           hadalAudio.setDucking(true);
         } else {
           hadalAudio.setDucking(false);
-          // If past end of narration, remain at 10,994m
           if (t >= NARRATION_TOTAL_DURATION - 1.0) {
             setCurrentDepth(10994);
             setCurrentZone('HADALPELAGIC');
@@ -97,7 +101,7 @@ export function App() {
     return () => cancelAnimationFrame(animId);
   }, []);
 
-  // Initiate Descent (Gate button clicked)
+  // Initiate Descent
   const handleStart = useCallback(() => {
     setHasStarted(true);
     setIsPlaying(true);
@@ -148,15 +152,42 @@ export function App() {
     }
   }, []);
 
-  // Manual Sonar Ping
+  // Camera View Toggle
+  const handleToggleCamera = useCallback(() => {
+    if (!sceneRef.current) return;
+    const nextMode = sceneRef.current.toggleCameraView();
+    setCameraMode(nextMode);
+  }, []);
+
+  // Trigger Protocol 002 (Strelizia Overdrive Easter Egg)
+  const handleTriggerProtocol002 = useCallback(() => {
+    setIsProtocol002((prev) => {
+      const next = !prev;
+      sceneRef.current?.setProtocol002(next);
+      if (next) {
+        hadalAudio.triggerKlaxosaurResonance();
+      }
+      return next;
+    });
+  }, []);
+
+  // Manual Sonar Ping + 3D Shockwave
   const handleManualPing = useCallback(() => {
     hadalAudio.triggerSonarPing();
-  }, []);
+    sceneRef.current?.triggerAcousticShockwave();
+    setPingCount((prev) => {
+      const next = prev + 1;
+      // Auto-unlock easter egg on 3 pings in deep water
+      if (next >= 3 && !isProtocol002) {
+        handleTriggerProtocol002();
+      }
+      return next;
+    });
+  }, [handleTriggerProtocol002, isProtocol002]);
 
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is in input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       if (e.code === 'Space' || e.code === 'KeyK') {
@@ -168,6 +199,12 @@ export function App() {
       } else if (e.code === 'KeyP') {
         e.preventDefault();
         handleManualPing();
+      } else if (e.code === 'KeyV') {
+        e.preventDefault();
+        handleToggleCamera();
+      } else if (e.code === 'KeyX') {
+        e.preventDefault();
+        handleTriggerProtocol002();
       } else if (e.code === 'KeyC') {
         e.preventDefault();
         setShowCaptions((prev) => !prev);
@@ -179,15 +216,25 @@ export function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTogglePlay, handleToggleMute, handleManualPing]);
+  }, [handleTogglePlay, handleToggleMute, handleManualPing, handleToggleCamera, handleTriggerProtocol002]);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#020408]">
       {/* 3D WebGL Canvas Layer */}
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full block touch-none"
+        className="absolute inset-0 w-full h-full block touch-none cursor-crosshair"
       />
+
+      {/* Cockpit First-Person Glass Viewport Overlay when in COCKPIT mode */}
+      {cameraMode === 'COCKPIT' && (
+        <div className="pointer-events-none absolute inset-0 z-10 border-[35px] sm:border-[55px] border-black/80 rounded-full opacity-60 shadow-[inset_0_0_100px_rgba(0,0,0,0.9)]" />
+      )}
+
+      {/* Protocol 002 Crimson Flare Overlay */}
+      {isProtocol002 && (
+        <div className="pointer-events-none absolute inset-0 z-10 border-2 border-red-500/30 bg-red-950/10 shadow-[inset_0_0_80px_rgba(239,68,68,0.25)] animate-pulse" />
+      )}
 
       {/* Hidden Master Narration Audio Element */}
       <audio
@@ -196,7 +243,6 @@ export function App() {
         preload="auto"
         onEnded={() => {
           setIsPlaying(false);
-          // Automatically offer archives on descent completion
           setIsArchiveOpen(true);
         }}
       />
@@ -209,7 +255,10 @@ export function App() {
         <CockpitHUD
           depthMeters={currentDepth}
           zone={currentZone}
-          onManualPing={handleManualPing}
+          cameraMode={cameraMode}
+          onToggleCamera={handleToggleCamera}
+          isProtocol002={isProtocol002}
+          onTriggerProtocol002={handleTriggerProtocol002}
         />
       )}
 
