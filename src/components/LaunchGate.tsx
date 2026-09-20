@@ -52,8 +52,10 @@ export const LaunchGate: React.FC<LaunchGateProps> = ({ onStart }) => {
             </span>
             <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-cyan-500/10 via-cyan-400/20 to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
           </button>
-          <div className="text-[11px] font-mono text-white/40 mt-3">
-            Best experienced with headphones · Web Audio & 3D WebGL Enabled
+          <div className="text-[11px] font-mono text-cyan-200/70 mt-3 flex items-center justify-center gap-2">
+            <span>🎙️ Narrated by Sir David Attenborough</span>
+            <span>·</span>
+            <span>Web Audio & 3D WebGL</span>
           </div>
         </div>
       </div>
